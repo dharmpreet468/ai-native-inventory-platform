@@ -41,5 +41,5 @@ class Inventory(Base):
         default=0
     )
     
-    product:Mapped[list["Product"]] = relationship(back_populates="inventory")
-    warehouse:Mapped[list["Warehouse"]] = relationship(back_populates="inventory")
+    product:Mapped["Product"] = relationship(back_populates="inventory")
+    warehouse:Mapped["Warehouse"] = relationship(back_populates="inventory")

@@ -11,4 +11,4 @@ class InventoryResponse(BaseModel):
     warehouse_id : int
     quantity : int
     
-config_model = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True)

@@ -9,4 +9,4 @@ class WarehouseResponse(BaseModel):
     name : str
     location: str
     
-config_model = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True)

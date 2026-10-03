@@ -9,6 +9,6 @@ class ProductResponse(BaseModel):
     id : int
     name : str
     price : float
-    category : str | None = None
+    category : str 
     
-model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True)

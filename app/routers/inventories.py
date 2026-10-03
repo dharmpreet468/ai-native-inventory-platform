@@ -1,12 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+# Core
 from app.core.database import get_db
+
+# Models
 from app.models.inventory import Inventory
 from app.models.product import Product
 from app.models.warehouse import Warehouse
+
+# Schemas
 from app.schemas.inventory import InventoryCreate,InventoryResponse
 
+# Services
+from app.services.inventory_services import deduct_stock
 
 router = APIRouter(
     prefix="/inventories",
@@ -36,7 +43,7 @@ def get_inventory(
     
 @router.post("/",response_model=InventoryResponse)
 def create_inventory(
-    product_id: int, warehouse_id:int,
+    product_id : int, warehouse_id:int,
     inventory:InventoryCreate,
     db:Session=Depends(get_db)
 ):
