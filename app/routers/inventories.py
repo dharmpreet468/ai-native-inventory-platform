@@ -4,16 +4,15 @@ from sqlalchemy.orm import Session
 # Core
 from app.core.database import get_db
 
-# Models
-from app.models.inventory import Inventory
-from app.models.product import Product
-from app.models.warehouse import Warehouse
-
 # Schemas
 from app.schemas.inventory import InventoryCreate,InventoryResponse
 
 # Services
-from app.services.inventory_services import deduct_stock
+from app.services.inventory_services import (
+    get_all_inventory_service,
+    get_inventory_by_id_service,
+    create_or_update_inventory_service
+)
 
 router = APIRouter(
     prefix="/inventories",
@@ -22,23 +21,24 @@ router = APIRouter(
 
 @router.get("/", response_model=list[InventoryResponse])
 def get_inventories(db:Session=Depends(get_db)):
-    inventories = db.query(Inventory).all();
-    return inventories
+    return get_all_inventory_service(db=db)
 
 @router.get("/{inventory_id}",response_model=InventoryResponse)
 def get_inventory(
     inventory_id:int,
     db:Session=Depends(get_db)
     ):
-        inventory = db.query(Inventory).filter(
-            Inventory.id == inventory_id
-        ).first()
+        inventory = get_inventory_by_id_service(
+            db=db,
+            inventory_id=inventory_id
+        )
         
         if inventory is None:
             raise HTTPException(
-                status_code = 404,
+                status_code=404,
                 detail="Inventory not found"
             )
+        
         return inventory
     
 @router.post("/",response_model=InventoryResponse)
@@ -47,46 +47,31 @@ def create_inventory(
     inventory:InventoryCreate,
     db:Session=Depends(get_db)
 ):
-    #  Checking for existing product data
-    product = db.query(Product).filter(Product.id==product_id).first()
-    
-    if product is None:
-        raise HTTPException(
-            status_code= 404,
-            detail="Product not found"
+    try:
+        new_inventory = create_or_update_inventory_service(
+            db=db,
+            product_id=product_id,
+            warehouse_id=warehouse_id,
+            quantity=inventory.quantity
         )
-        
-    #  Checking for existing warehouse data
-    warehouse = db.query(Warehouse).filter(Warehouse.id==warehouse_id).first()
-    
-    if warehouse is None:
-        raise HTTPException(
-            status_code= 404,
-            detail="Warehouse not found"
-        )
-    
-    #  Checking for existing inventory data
-    existing_inventory = db.query(Inventory).filter(
-        Inventory.product_id == product_id,
-        Inventory.warehouse_id == warehouse_id
-    ).first()
-    
-    if existing_inventory:
-        existing_inventory.quantity += inventory.quantity
         
         db.commit()
-        db.refresh(existing_inventory)
-        
-        return existing_inventory 
-        
-    new_inventory = Inventory(
-        product_id = inventory.product_id,
-        warehouse_id = inventory.warehouse_id,
-        quantity = inventory.quantity
-    )
+        db.refresh(new_inventory)
     
-    db.add(new_inventory)
-    db.commit()
-    db.refresh(new_inventory)
+        return new_inventory
     
-    return new_inventory
+    except ValueError as e:
+        db.rollback()
+        
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
+
+    except Exception:
+        db.rollback()
+        
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to create inventory"
+        )
