@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, UniqueConstraint
+from sqlalchemy import ForeignKey, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import Mapped,mapped_column, relationship
 
 from app.models.base import Base
@@ -11,35 +11,39 @@ if TYPE_CHECKING:
 
 class Inventory(Base):
     __tablename__ = "Inventory"
-    
+
     __table_args__ = (
         UniqueConstraint(
             "product_id",
             "warehouse_id",
             name = "uq_product_warehouse"
         ),
+        CheckConstraint(
+            "quantity >= 0",
+            name="ck_inventory_quantity_non_negative"
+        )
     )
-    
+
     id:Mapped[int]=mapped_column(
         primary_key= True,
         index=True
     )
-    
+
     product_id:Mapped[int]=mapped_column(
         ForeignKey("products.id"),
         nullable=False
     )
-    
+
     warehouse_id:Mapped[int]=mapped_column(
         ForeignKey("warehouses.id"),
         nullable=False
     )
-    
-    
+
+
     quantity:Mapped[int]=mapped_column(
         nullable=False,
         default=0
     )
-    
+
     product:Mapped["Product"] = relationship(back_populates="inventory")
     warehouse:Mapped["Warehouse"] = relationship(back_populates="inventory")

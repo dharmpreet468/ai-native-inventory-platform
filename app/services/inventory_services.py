@@ -1,5 +1,12 @@
 from sqlalchemy.orm import Session
 
+from app.core.exceptions import (
+    InventoryNotFoundException,
+    ProductNotFoundException,
+    WarehouseNotFoundException,
+    InsufficientInventory,
+    InventoryAlreadyExistsException
+    )
 from app.models.inventory import Inventory
 from app.repositories.inventory_repository import (
     add_inventory,
@@ -10,6 +17,9 @@ from app.repositories.inventory_repository import (
     get_product_by_id,
     get_warehouse_by_id,
     update_inventory_quantity,
+    update_inventory,
+    delete_inventory,
+    inventory_exists_for_product_warehouse
 )
 
 def get_inventory_service(
@@ -22,8 +32,8 @@ def get_inventory_service(
         product_id=product_id,
         warehouse_id=warehouse_id
     )
-    
-    
+
+
 def get_all_inventory_service(db:Session):
     return get_all_inventories(db=db)
 
@@ -31,10 +41,15 @@ def get_inventory_by_id_service(
     db:Session,
     inventory_id:int
 ):
-    return get_inventory_by_id(
+    inventory =  get_inventory_by_id(
         db=db,
         inventory_id=inventory_id
     )
+
+    if inventory is None:
+        raise InventoryNotFoundException(inventory_id)
+
+    return inventory
 
 
 def check_stock(
@@ -43,18 +58,18 @@ def check_stock(
     warehouse_id:int,
     required_quantity:int
 )-> bool:
-        
+
         inventory = get_inventory(
             db = db,
             product_id=product_id,
             warehouse_id = warehouse_id
         )
-        
+
         if inventory is None:
-            raise ValueError("Inventory not found")
-        
+            raise InventoryNotFoundException(product_id)
+
         return inventory.quantity >= required_quantity
-    
+
 def deduct_stock(
     db:Session,
     product_id:int,
@@ -62,20 +77,20 @@ def deduct_stock(
     quantity:int
 ):
     inventory = get_inventory(db,product_id,warehouse_id)
-    
+
     if inventory is None:
-        raise ValueError("Inventory not found")
-    
+        raise InventoryNotFoundException(product_id)
+
     if inventory.quantity < quantity:
-        raise ValueError("Insufficient inventory")
-    
+        raise InsufficientInventory(product_id,quantity,inventory.quantity)
+
     new_quantity = inventory.quantity - quantity
-    
+
     return update_inventory_quantity(
         inventory=inventory,
         quantity=new_quantity
     )
-    
+
 def create_or_update_inventory_service(
     db:Session,
     product_id:int,
@@ -86,25 +101,25 @@ def create_or_update_inventory_service(
         db=db,
         product_id=product_id
     )
-    
+
     if product is None:
-        raise ValueError("product not found")
-    
-    
+        raise ProductNotFoundException(product_id)
+
+
     warehouse = get_warehouse_by_id(
         db=db,
         warehouse_id=warehouse_id
     )
-    
+
     if warehouse is None:
-        raise ValueError("warehouse not found")
-    
+        raise WarehouseNotFoundException(warehouse_id)
+
     existing_inventory = get_inventory(
         db=db,
         product_id=product_id,
         warehouse_id=warehouse_id
     )
-    
+
     if existing_inventory:
         existing_inventory.quantity += quantity
         return existing_inventory
@@ -119,4 +134,82 @@ def create_or_update_inventory_service(
         db=db,
         inventory=new_inventory,
     )
-   
+
+
+def update_inventory_service(
+    db:Session,
+    inventory_id:int,
+    update:dict
+):
+    inventory = get_inventory_by_id(
+        db=db,
+        inventory_id=inventory_id
+    )
+
+    if inventory is None:
+        raise InventoryNotFoundException(inventory_id)
+
+
+    # Validation of product if it is being changed
+    if "product_id" in update:
+        product = get_product_by_id(
+            db=db,
+            product_id = update["product_id"]
+        )
+
+        if product is None:
+            raise ProductNotFoundException(update["product_id"])
+
+    # Validation of warehouse if it is being changed
+    if "warehouse_id" in update:
+        warehouse = get_warehouse_by_id(
+            db=db,
+            warehouse_id = update["warehouse_id"]
+        )
+
+        if warehouse is None:
+            raise WarehouseNotFoundException(update["warehouse_id"])
+
+    # Determine final product/warehouse combination
+    final_product_id = update.get(
+        "product_id",
+        inventory.product_id
+    )
+
+    final_warehouse_id = update.get(
+        "warehouse_id",
+        inventory.warehouse_id
+    )
+
+    # prevent duplicate product + warehouse combination
+    if inventory_exists_for_product_warehouse(
+        db=db,
+        product_id=final_product_id,
+        warehouse_id=final_warehouse_id,
+        exclude_inventory_id=inventory_id
+    ):
+        raise InventoryAlreadyExistsException(
+            final_product_id,
+            final_warehouse_id
+        )
+
+    return update_inventory(
+        inventory=inventory,
+        update=update
+    )
+
+def delete_inventory_service(
+    db:Session,
+    inventory_id:int
+):
+    inventory = get_inventory_by_id(
+        db=db,
+        inventory_id=inventory_id
+    )
+    if inventory is None:
+        raise InventoryNotFoundException(inventory_id)
+
+    return delete_inventory(
+        db=db,
+        inventory=inventory
+        )
