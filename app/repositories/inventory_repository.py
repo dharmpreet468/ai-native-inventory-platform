@@ -43,7 +43,7 @@ def get_inventory_by_id(
     )
 
     if for_update:
-        query = query.with_for_update().first()
+        query = query.with_for_update()
 
     return query.first()
 

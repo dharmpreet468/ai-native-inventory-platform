@@ -14,6 +14,7 @@ from app.routers.products import router as products_router
 from app.routers.warehouses import router as warehouses_router
 from app.routers.inventories import router as inventories_router
 from app.routers.orders import router as orders_router
+from app.routers.analytics import router as analytics_router
 
 # Centeralized Error Handler
 from app.core.exceptions import (
@@ -43,6 +44,7 @@ app.include_router(products_router)
 app.include_router(warehouses_router)
 app.include_router(inventories_router)
 app.include_router(orders_router)
+app.include_router(analytics_router)
 
 @app.get("/")
 def root():

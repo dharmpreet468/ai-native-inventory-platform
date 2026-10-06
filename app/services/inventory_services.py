@@ -121,8 +121,10 @@ def create_or_update_inventory_service(
     )
 
     if existing_inventory:
-        existing_inventory.quantity += quantity
-        return existing_inventory
+        raise InventoryAlreadyExistsException(
+            product_id=product_id,
+            warehouse_id=warehouse_id
+        )
 
     new_inventory = Inventory(
         product_id=product_id,
