@@ -35,6 +35,7 @@ class Order(Base):
     product:Mapped["Product"] = relationship()
 
     allocations:Mapped[list["OrderAllocation"]] = relationship(
+        back_populates="order",
         cascade="all, delete-orphan"
     )
 

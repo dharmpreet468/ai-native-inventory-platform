@@ -31,5 +31,11 @@ class OrderAllocation(Base):
         nullable=False
     )
 
-    product:Mapped["Order"] = relationship()
+    order:Mapped["Order"] = relationship(
+        back_populates="allocations"
+    )
+    
+    inventory:Mapped["Inventory"]=relationship()
+    
+    
 
