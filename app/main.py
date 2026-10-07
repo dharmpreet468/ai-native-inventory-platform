@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 #  Core
 from app.core.database import engine
@@ -37,6 +38,16 @@ from app.core.exceptions import (
 app = FastAPI(
     title= "AI Native Inventory Management Platform",
     version= "1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
 )
 
 Base.metadata.create_all(bind=engine)

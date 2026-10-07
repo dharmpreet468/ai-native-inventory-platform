@@ -91,7 +91,7 @@ def update_product_patch(
 
     return updated_warehouse
 
-@router.delete("/{product_id}", status_code=204)
+@router.delete("/{warehouse_id}", status_code=204)
 def delete_product(
     warehouse_id: int,
     db:Session=Depends(get_db)
