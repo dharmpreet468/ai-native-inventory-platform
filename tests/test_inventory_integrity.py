@@ -1,13 +1,7 @@
 from uuid import uuid4
 
-from fastapi.testclient import TestClient
 
-from app.main import app
-
-client = TestClient(app)
-
-
-def create_test_product():
+def create_test_product(client):
     name = f"Day6 Product {uuid4().hex[:8]}"
 
     response = client.post(
@@ -23,7 +17,7 @@ def create_test_product():
     return response.json()["id"]
 
 
-def create_test_warehouse():
+def create_test_warehouse(client):
     name = f"Day6 Warehouse {uuid4().hex[:8]}"
 
     response = client.post(
@@ -38,9 +32,11 @@ def create_test_warehouse():
     return response.json()["id"]
 
 
-def test_inventory_lifecycle():
-    product_id = create_test_product()
-    warehouse_id = create_test_warehouse()
+def test_inventory_lifecycle(authenticated_client):
+    client = authenticated_client
+
+    product_id = create_test_product(client)
+    warehouse_id = create_test_warehouse(client)
 
     # 1. Create inventory
     response = client.post(
@@ -118,12 +114,15 @@ def test_inventory_lifecycle():
     )
 
     assert response.status_code == 404
-    
-def test_order_insufficient_inventory_rolls_back():
-    product_id = create_test_product()
 
-    warehouse_1 = create_test_warehouse()
-    warehouse_2 = create_test_warehouse()
+
+def test_order_insufficient_inventory_rolls_back(authenticated_client):
+    client = authenticated_client
+
+    product_id = create_test_product(client)
+
+    warehouse_1 = create_test_warehouse(client)
+    warehouse_2 = create_test_warehouse(client)
 
     response = client.post(
         "/inventories/",
@@ -133,6 +132,7 @@ def test_order_insufficient_inventory_rolls_back():
             "quantity": 60,
         },
     )
+
     assert response.status_code == 200
     inventory_1_id = response.json()["id"]
 
@@ -144,6 +144,7 @@ def test_order_insufficient_inventory_rolls_back():
             "quantity": 40,
         },
     )
+
     assert response.status_code == 200
     inventory_2_id = response.json()["id"]
 
@@ -159,20 +160,28 @@ def test_order_insufficient_inventory_rolls_back():
     assert response.status_code == 409
 
     # Rollback must preserve both inventory quantities
-    response = client.get(f"/inventories/{inventory_1_id}")
+    response = client.get(
+        f"/inventories/{inventory_1_id}"
+    )
+
     assert response.status_code == 200
     assert response.json()["quantity"] == 60
 
-    response = client.get(f"/inventories/{inventory_2_id}")
+    response = client.get(
+        f"/inventories/{inventory_2_id}"
+    )
+
     assert response.status_code == 200
     assert response.json()["quantity"] == 40
-    
-    
-def test_order_allocates_across_multiple_warehouses():
-    product_id = create_test_product()
 
-    warehouse_1 = create_test_warehouse()
-    warehouse_2 = create_test_warehouse()
+
+def test_order_allocates_across_multiple_warehouses(authenticated_client):
+    client = authenticated_client
+
+    product_id = create_test_product(client)
+
+    warehouse_1 = create_test_warehouse(client)
+    warehouse_2 = create_test_warehouse(client)
 
     response = client.post(
         "/inventories/",
@@ -182,6 +191,7 @@ def test_order_allocates_across_multiple_warehouses():
             "quantity": 60,
         },
     )
+
     assert response.status_code == 200
     inventory_1_id = response.json()["id"]
 
@@ -193,6 +203,7 @@ def test_order_allocates_across_multiple_warehouses():
             "quantity": 40,
         },
     )
+
     assert response.status_code == 200
     inventory_2_id = response.json()["id"]
 
@@ -214,20 +225,29 @@ def test_order_allocates_across_multiple_warehouses():
     assert order["status"] == "CONFIRMED"
 
     # Warehouse 1: 60 - 60 = 0
-    response = client.get(f"/inventories/{inventory_1_id}")
+    response = client.get(
+        f"/inventories/{inventory_1_id}"
+    )
+
     assert response.status_code == 200
     assert response.json()["quantity"] == 0
 
     # Warehouse 2: 40 - 15 = 25
-    response = client.get(f"/inventories/{inventory_2_id}")
+    response = client.get(
+        f"/inventories/{inventory_2_id}"
+    )
+
     assert response.status_code == 200
     assert response.json()["quantity"] == 25
-    
-def test_order_cancellation_restores_allocated_inventory():
-    product_id = create_test_product()
 
-    warehouse_1 = create_test_warehouse()
-    warehouse_2 = create_test_warehouse()
+
+def test_order_cancellation_restores_allocated_inventory(authenticated_client):
+    client = authenticated_client
+
+    product_id = create_test_product(client)
+
+    warehouse_1 = create_test_warehouse(client)
+    warehouse_2 = create_test_warehouse(client)
 
     response = client.post(
         "/inventories/",
@@ -237,6 +257,7 @@ def test_order_cancellation_restores_allocated_inventory():
             "quantity": 60,
         },
     )
+
     assert response.status_code == 200
     inventory_1_id = response.json()["id"]
 
@@ -248,6 +269,7 @@ def test_order_cancellation_restores_allocated_inventory():
             "quantity": 40,
         },
     )
+
     assert response.status_code == 200
     inventory_2_id = response.json()["id"]
 
@@ -261,36 +283,60 @@ def test_order_cancellation_restores_allocated_inventory():
     )
 
     assert response.status_code == 200
+
     order_id = response.json()["id"]
+
     assert response.json()["status"] == "CONFIRMED"
 
     # Verify stock was deducted
-    response = client.get(f"/inventories/{inventory_1_id}")
+    response = client.get(
+        f"/inventories/{inventory_1_id}"
+    )
+
+    assert response.status_code == 200
     assert response.json()["quantity"] == 0
 
-    response = client.get(f"/inventories/{inventory_2_id}")
+    response = client.get(
+        f"/inventories/{inventory_2_id}"
+    )
+
+    assert response.status_code == 200
     assert response.json()["quantity"] == 25
 
     # Cancel order
-    response = client.delete(f"/orders/{order_id}")
+    response = client.delete(
+        f"/orders/{order_id}"
+    )
 
     assert response.status_code == 200
 
     # Verify exact restoration
-    response = client.get(f"/inventories/{inventory_1_id}")
+    response = client.get(
+        f"/inventories/{inventory_1_id}"
+    )
+
     assert response.status_code == 200
     assert response.json()["quantity"] == 60
 
-    response = client.get(f"/inventories/{inventory_2_id}")
+    response = client.get(
+        f"/inventories/{inventory_2_id}"
+    )
+
     assert response.status_code == 200
     assert response.json()["quantity"] == 40
 
     # Verify order is cancelled
-    response = client.get(f"/orders/{order_id}")
+    response = client.get(
+        f"/orders/{order_id}"
+    )
+
     assert response.status_code == 200
     assert response.json()["status"] == "CANCELLED"
-    
-def test_analytics_summary():
+
+
+def test_analytics_summary(authenticated_client):
+    client = authenticated_client
+
     response = client.get("/analytics/summary")
 
     assert response.status_code == 200
@@ -310,9 +356,14 @@ def test_analytics_summary():
     assert data["total_orders"] >= 0
     assert data["total_order_units"] >= 0
     assert data["total_inventory_value"] >= 0
-    
-def test_low_stock_inventory():
-    response = client.get("/analytics/low-stock?threshold=20")
+
+
+def test_low_stock_inventory(authenticated_client):
+    client = authenticated_client
+
+    response = client.get(
+        "/analytics/low-stock?threshold=20"
+    )
 
     assert response.status_code == 200
 

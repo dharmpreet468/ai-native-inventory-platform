@@ -1,12 +1,5 @@
 import uuid
 
-from fastapi.testclient import TestClient
-
-from app.main import app
-
-
-client = TestClient(app)
-
 
 # ============================================================
 # HTTP CONTRACT
@@ -23,7 +16,7 @@ HTTP_UNPROCESSABLE_ENTITY = 422
 # FULL-STACK BUSINESS WORKFLOW
 # ============================================================
 
-def test_full_stack_inventory_order_workflow():
+def test_full_stack_inventory_order_workflow(authenticated_client):
     """
     Full integration test:
 
@@ -57,6 +50,8 @@ def test_full_stack_inventory_order_workflow():
     - Duplicate cancellation protection
     - Analytics
     """
+
+    client = authenticated_client
 
     suffix = uuid.uuid4().hex[:8]
 
@@ -192,7 +187,7 @@ def test_full_stack_inventory_order_workflow():
     inventory_b_id = inventory_b["id"]
 
     # ========================================================
-    # 7. VERIFY TOTAL INVENTORY = 80
+    # 7. VERIFY INVENTORY
     # ========================================================
 
     response = client.get(
@@ -211,8 +206,6 @@ def test_full_stack_inventory_order_workflow():
 
     # ========================================================
     # 8. DUPLICATE INVENTORY MUST BE REJECTED
-    #
-    # Same product + same warehouse
     # ========================================================
 
     response = client.post(
@@ -228,8 +221,6 @@ def test_full_stack_inventory_order_workflow():
 
     # ========================================================
     # 9. INVALID INVENTORY QUANTITY
-    #
-    # quantity >= 0 is required
     # ========================================================
 
     response = client.post(
@@ -325,8 +316,6 @@ def test_full_stack_inventory_order_workflow():
     #
     # Only 20 units remain.
     # Request 100.
-    #
-    # Expected: 400
     # ========================================================
 
     response = client.post(
@@ -359,8 +348,6 @@ def test_full_stack_inventory_order_workflow():
 
     # ========================================================
     # 15. INVALID ORDER QUANTITY
-    #
-    # quantity > 0 is required
     # ========================================================
 
     response = client.post(
@@ -428,7 +415,7 @@ def test_full_stack_inventory_order_workflow():
     # ========================================================
     # 20. UPDATE CONFIRMED ORDER
     #
-    # Your domain does not allow modification after confirmation.
+    # Confirmed orders cannot be modified.
     # ========================================================
 
     response = client.patch(
