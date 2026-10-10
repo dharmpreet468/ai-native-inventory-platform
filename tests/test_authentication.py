@@ -140,7 +140,7 @@ def test_invalid_signature_returns_401():
 
     token = jwt.encode(
         payload,
-        "incorrect-test-secret",
+        "incorrect-test-signing-key-at-least-32-bytes",
         algorithm=JWT_ALGORITHM,
     )
 
