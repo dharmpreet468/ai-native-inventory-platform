@@ -1,49 +1,70 @@
 import {
-  BrowserRouter,
-  Route,
-  Routes
-} from 'react-router-dom'
+    BrowserRouter,
+    Navigate,
+    Outlet,
+    Route,
+    Routes,
+} from "react-router-dom"
 
-import AppLayout from './layouts/AppLayout'
+import { AuthProvider, useAuth } from "./context/AuthContext"
 
-import Dashboard from './pages/Dashboard'
-import Products from './pages/Products'
-import Warehouses from './pages/Warehouses'
-import Inventory from './pages/Inventory'
-import Orders from './pages/Orders'
-import Analytics from './pages/Analytics'
+import AppLayout from "./layouts/AppLayout"
 
-function App() {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<AppLayout />}>
-          <Route path="/" element={<Dashboard />}/>
+import Dashboard from "./pages/Dashboard"
+import Products from "./pages/Products"
+import Warehouses from "./pages/Warehouses"
+import Inventory from "./pages/Inventory"
+import Orders from "./pages/Orders"
+import Analytics from "./pages/Analytics"
+import Login from "./pages/Login"
+import Register from "./pages/Register"
 
-          <Route 
-            path="/products"
-            element={<Products />}/>
+function ProtectedRoute() {
+    const { isAuthenticated, loading } = useAuth()
 
-          <Route 
-            path="/warehouses"
-            element={<Warehouses />}/>
+    if (loading) {
+        return (
+            <div className="flex min-h-screen items-center justify-center">
+                Loading...
+            </div>
+        )
+    }
 
-          <Route 
-            path="/inventory"
-            element={<Inventory />}/>
+    if (!isAuthenticated) {
+        return <Navigate to="/login" replace />
+    }
 
-          <Route 
-            path="/orders"
-            element={<Orders />}/>
-
-          <Route
-            path="/analytics"
-            element={<Analytics/>}/>
-         
-        </Route>
-      </Routes>
-    </BrowserRouter>
-  )
+    return <Outlet />
 }
 
-export default App
+function AppRoutes() {
+    return (
+        <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+
+            <Route element={<ProtectedRoute />}>
+                <Route element={<AppLayout />}>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/products" element={<Products />} />
+                    <Route path="/warehouses" element={<Warehouses />} />
+                    <Route path="/inventory" element={<Inventory />} />
+                    <Route path="/orders" element={<Orders />} />
+                    <Route path="/analytics" element={<Analytics />} />
+                </Route>
+            </Route>
+
+            <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+    )
+}
+
+export default function App() {
+    return (
+        <BrowserRouter>
+            <AuthProvider>
+                <AppRoutes />
+            </AuthProvider>
+        </BrowserRouter>
+    )
+}

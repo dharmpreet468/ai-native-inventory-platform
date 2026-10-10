@@ -7,8 +7,10 @@ from app.core.database import engine
 
 #  Models
 from app.models.base import Base
+from app.models.user import User
 from app.models.order import Order
 from app.models.order_allocation import OrderAllocation
+from app.models.refresh_token import RefreshToken
 
 #  Routers
 from app.routers.products import router as products_router
@@ -16,6 +18,7 @@ from app.routers.warehouses import router as warehouses_router
 from app.routers.inventories import router as inventories_router
 from app.routers.orders import router as orders_router
 from app.routers.analytics import router as analytics_router
+from app.routers.auth import router as auth_router
 
 # Centeralized Error Handler
 from app.core.exceptions import (
@@ -31,14 +34,13 @@ from app.core.exceptions import (
     WarehouseHasInventoryException,
     InventoryAlreadyExistsException,
     CancelledOrderException,
-    OrderAlreadyConfirmedException
-
+    OrderAlreadyConfirmedException,
+    UsernameAlreadyExistedException,
+    EmailAlreadyExistedException,
+    InvalidUsernamePasswordException,
 )
 
-app = FastAPI(
-    title= "AI Native Inventory Management Platform",
-    version= "1.0.0"
-)
+app = FastAPI(title="AI Native Inventory Management Platform", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -47,7 +49,7 @@ app.add_middleware(
     ],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
 Base.metadata.create_all(bind=engine)
@@ -56,29 +58,28 @@ app.include_router(warehouses_router)
 app.include_router(inventories_router)
 app.include_router(orders_router)
 app.include_router(analytics_router)
+app.include_router(auth_router)
+
 
 @app.get("/")
 def root():
-    return {
-        "message":"AI Native Inventory Management API is running..."
-    }
+    return {"message": "AI Native Inventory Management API is running..."}
+
 
 @app.get("/health")
 def health_check():
     try:
         with engine.connect():
-            return{
-                "status":"healthy",
-                "database":"connected",
+            return {
+                "status": "healthy",
+                "database": "connected",
             }
     except Exception as e:
-        return{
-            "status":"unhealthy",
-            "database":"disconnected",
-            "error":str(e)
-        }
+        return {"status": "unhealthy", "database": "disconnected", "error": str(e)}
+
 
 # Centralised Error Handling
+
 
 @app.exception_handler(ProductNotFoundException)
 async def product_not_found_handler(
@@ -87,12 +88,13 @@ async def product_not_found_handler(
 ):
     return JSONResponse(
         status_code=404,
-        content = {
-            "error" : "PRODUCT_NOT_FOUND",
-            "message" : str(exc),
-            "product_id":exc.product_id
-        }
+        content={
+            "error": "PRODUCT_NOT_FOUND",
+            "message": str(exc),
+            "product_id": exc.product_id,
+        },
     )
+
 
 @app.exception_handler(WarehouseNotFoundException)
 async def warehouse_not_found_handler(
@@ -101,12 +103,13 @@ async def warehouse_not_found_handler(
 ):
     return JSONResponse(
         status_code=404,
-        content = {
-            "error" : "WAREHOUSE_NOT_FOUND",
-            "message" : str(exc),
-            "warehouse_id": exc.warehouse_id
-        }
+        content={
+            "error": "WAREHOUSE_NOT_FOUND",
+            "message": str(exc),
+            "warehouse_id": exc.warehouse_id,
+        },
     )
+
 
 @app.exception_handler(InventoryNotFoundException)
 async def inventory_not_found_handler(
@@ -115,12 +118,13 @@ async def inventory_not_found_handler(
 ):
     return JSONResponse(
         status_code=404,
-        content = {
-            "error" : "INVENTORY_NOT_FOUND",
-            "message" : str(exc),
-            "inventory_id": exc.inventory_id
-        }
+        content={
+            "error": "INVENTORY_NOT_FOUND",
+            "message": str(exc),
+            "inventory_id": exc.inventory_id,
+        },
     )
+
 
 @app.exception_handler(OrderNotFoundException)
 async def order_not_found_handler(
@@ -129,111 +133,142 @@ async def order_not_found_handler(
 ):
     return JSONResponse(
         status_code=404,
-        content = {
-            "error" : "INVENTORY_NOT_FOUND",
-            "message" : str(exc),
-            "inventory_id": exc.order_id
-        }
+        content={
+            "error": "INVENTORY_NOT_FOUND",
+            "message": str(exc),
+            "inventory_id": exc.order_id,
+        },
     )
 
+
 @app.exception_handler(InsufficientInventory)
-async def insufficent_inventory_handler(
-    request: Request,
-    exc:InsufficientInventory
-):
+async def insufficent_inventory_handler(request: Request, exc: InsufficientInventory):
     return JSONResponse(
-        status_code= 409,
-        content = {
-            "error":"INSUFFICIENT_INVENTORY",
+        status_code=409,
+        content={
+            "error": "INSUFFICIENT_INVENTORY",
             "message": str(exc),
-            "product_id":exc.product_id,
-            "requested":exc.requested,
-            "available":exc.available
-        }
+            "product_id": exc.product_id,
+            "requested": exc.requested,
+            "available": exc.available,
+        },
     )
+
 
 @app.exception_handler(ProductHasInventoryException)
 async def product_has_inventory_handler(
-    request: Request,
-    exc:ProductHasInventoryException
+    request: Request, exc: ProductHasInventoryException
 ):
     return JSONResponse(
-        status_code= 409,
-        content = {
-            "error":"PRODUCT_HAS_INVENTORY",
+        status_code=409,
+        content={
+            "error": "PRODUCT_HAS_INVENTORY",
             "message": str(exc),
-            "product_id":exc.product_id
-        }
+            "product_id": exc.product_id,
+        },
     )
 
+
 @app.exception_handler(ProductHasOrderException)
-async def product_has_order_handler(
-    request: Request,
-    exc:ProductHasOrderException
-):
+async def product_has_order_handler(request: Request, exc: ProductHasOrderException):
     return JSONResponse(
-        status_code= 409,
-        content = {
-            "error":"PRODUCT_HAS_ORDER",
+        status_code=409,
+        content={
+            "error": "PRODUCT_HAS_ORDER",
             "message": str(exc),
-            "product_id":exc.product_id
-        }
+            "product_id": exc.product_id,
+        },
     )
+
 
 @app.exception_handler(WarehouseHasInventoryException)
 async def warehouse_has_inventory_handler(
-    request: Request,
-    exc:WarehouseHasInventoryException
+    request: Request, exc: WarehouseHasInventoryException
 ):
     return JSONResponse(
-        status_code= 409,
-        content = {
-            "error":"WAREHOUSE_HAS_INVENTORY",
+        status_code=409,
+        content={
+            "error": "WAREHOUSE_HAS_INVENTORY",
             "message": str(exc),
-            "warehouse_id":exc.warehouse_id
-        }
+            "warehouse_id": exc.warehouse_id,
+        },
     )
+
 
 @app.exception_handler(InventoryAlreadyExistsException)
 async def inventory_already_existed_handler(
-    request: Request,
-    exc:InventoryAlreadyExistsException
+    request: Request, exc: InventoryAlreadyExistsException
 ):
     return JSONResponse(
-        status_code= 409,
-        content = {
-            "error":"INVENTORY_ALREADY_EXISTED",
+        status_code=409,
+        content={
+            "error": "INVENTORY_ALREADY_EXISTED",
             "message": str(exc),
-            "product_id":exc.product_id,
-            "warehouse_id":exc.warehouse_id
-        }
+            "product_id": exc.product_id,
+            "warehouse_id": exc.warehouse_id,
+        },
     )
 
+
 @app.exception_handler(CancelledOrderException)
-async def cancelled_order_handler(
-    request: Request,
-    exc:CancelledOrderException
-):
+async def cancelled_order_handler(request: Request, exc: CancelledOrderException):
     return JSONResponse(
-        status_code= 409,
-        content = {
-            "error":"ORDER_CANCELLED_ALREADY",
+        status_code=409,
+        content={
+            "error": "ORDER_CANCELLED_ALREADY",
             "message": str(exc),
-            "order_id":exc.order_id
-        }
+            "order_id": exc.order_id,
+        },
     )
+
 
 @app.exception_handler(OrderAlreadyConfirmedException)
 async def order_already_confirmed_handler(
-    request: Request,
-    exc:OrderAlreadyConfirmedException
+    request: Request, exc: OrderAlreadyConfirmedException
 ):
     return JSONResponse(
-        status_code= 409,
-        content = {
-            "error":"ORDER_ALREADY_CONFIRMED",
+        status_code=409,
+        content={
+            "error": "ORDER_ALREADY_CONFIRMED",
             "message": str(exc),
-            "order_id":exc.order_id
-        }
+            "order_id": exc.order_id,
+        },
     )
 
+
+@app.exception_handler(UsernameAlreadyExistedException)
+async def username_already_exists_handler(
+    request: Request, exc: UsernameAlreadyExistedException
+):
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": "USERNAME_ALREADY_EXISTS",
+            "message": str(exc),
+            "username": exc.username,
+        },
+    )
+
+
+@app.exception_handler(EmailAlreadyExistedException)
+async def email_already_exists_handler(
+    request: Request, exc: EmailAlreadyExistedException
+):
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": "EMAIL_ALREADY_EXISTS",
+            "message": str(exc),
+            "email_id": exc.email,
+        },
+    )
+
+
+@app.exception_handler(InvalidUsernamePasswordException)
+async def invalid_username_handler(
+    request: Request, exc: InvalidUsernamePasswordException
+):
+    return JSONResponse(
+        status_code=401,
+        content={"error": "INVALID_USERNAME_PASSWORD", "message": str(exc)},
+    )

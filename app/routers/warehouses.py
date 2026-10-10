@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.models.user import User
 from app.core.database import get_db
+from app.core.dependencies import get_current_user, require_roles
 from app.core.exceptions import WarehouseNotFoundException
 from app.models.warehouse import Warehouse
 from app.schemas.warehouse import WarehouseCreate,WarehouseResponse,WarehouseUpdate
@@ -22,13 +24,17 @@ router = APIRouter(
 )
 
 @router.get("/", response_model=list[WarehouseResponse])
-def get_warehouses(db:Session=Depends(get_db)):
+def get_warehouses(
+    db:Session=Depends(get_db),
+    current_user: User = Depends(require_roles("admin","manager","employee"))
+    ):
     return get_all_warehouses_service(db=db)
 
 @router.get("/{warehouse_id}", response_model=WarehouseResponse)
 def get_warehouse(
     warehouse_id:int,
-    db:Session=Depends(get_db)
+    db:Session=Depends(get_db),
+    current_user: User = Depends(require_roles("admin","manager","employee"))
     ):
         warehouse = get_warehouse_by_id_service(
             db=db,
@@ -40,7 +46,8 @@ def get_warehouse(
 @router.post("/",response_model=WarehouseResponse)
 def create_warehouse(
     warehouse:WarehouseCreate,
-    db:Session=Depends(get_db)
+    db:Session=Depends(get_db),
+    current_user: User = Depends(require_roles("admin"))
 ):
     new_warehouse = create_warehouse_service(
         db=db,
@@ -57,7 +64,8 @@ def create_warehouse(
 def update_product_put(
     warehouse_id:int,
     warehouse:WarehouseCreate,
-    db:Session=Depends(get_db)
+    db:Session=Depends(get_db),
+    current_user: User = Depends(require_roles("admin"))
 ):
     updates = warehouse.model_dump()
 
@@ -76,7 +84,8 @@ def update_product_put(
 def update_product_patch(
     warehouse_id:int,
     warehouse:WarehouseUpdate,
-    db:Session=Depends(get_db)
+    db:Session=Depends(get_db),
+    current_user: User = Depends(require_roles("admin"))
 ):
     updates = warehouse.model_dump(exclude_unset=True)
 
@@ -94,7 +103,8 @@ def update_product_patch(
 @router.delete("/{warehouse_id}", status_code=204)
 def delete_product(
     warehouse_id: int,
-    db:Session=Depends(get_db)
+    db:Session=Depends(get_db),
+    current_user: User = Depends(require_roles("admin"))
 ):
     warehouse = get_warehouse_by_id_service(
         db=db,

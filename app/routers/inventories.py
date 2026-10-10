@@ -1,8 +1,11 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.models.user import User
+
 # Core
 from app.core.database import get_db
+from app.core.dependencies import get_current_user,require_roles
 
 # Schemas
 from app.schemas.inventory import InventoryCreate,InventoryResponse,InventoryUpdate
@@ -22,13 +25,17 @@ router = APIRouter(
 )
 
 @router.get("/", response_model=list[InventoryResponse])
-def get_inventories(db:Session=Depends(get_db)):
+def get_inventories(
+    db:Session=Depends(get_db),
+    current_user: User = Depends(require_roles("admin","manager","employee"))
+    ):
     return get_all_inventory_service(db=db)
 
 @router.get("/{inventory_id}",response_model=InventoryResponse)
 def get_inventory(
     inventory_id:int,
-    db:Session=Depends(get_db)
+    db:Session=Depends(get_db),
+    current_user: User = Depends(require_roles("admin","manager","employee"))
     ):
         return get_inventory_by_id_service(
             db=db,
@@ -38,7 +45,8 @@ def get_inventory(
 @router.post("/",response_model=InventoryResponse)
 def create_inventory(
     inventory:InventoryCreate,
-    db:Session=Depends(get_db)
+    db:Session=Depends(get_db),
+    current_user: User = Depends(require_roles("admin","manager"))
 ):
     new_inventory = create_or_update_inventory_service(
         db=db,
@@ -56,7 +64,8 @@ def create_inventory(
 def update_inventory_put(
     inventory_id:int,
     inventory:InventoryCreate,
-    db:Session=Depends(get_db)
+    db:Session=Depends(get_db),
+    current_user: User = Depends(require_roles("admin","manager"))
 ):
     updates = inventory.model_dump()
     updated_inventory = update_inventory_service(
@@ -74,7 +83,8 @@ def update_inventory_put(
 def update_inventory_patch(
     inventory_id:int,
     inventory:InventoryUpdate,
-    db:Session=Depends(get_db)
+    db:Session=Depends(get_db),
+    current_user: User = Depends(require_roles("admin","manager"))
 ):
     updates = inventory.model_dump(exclude_unset=True)
     updated_inventory = update_inventory_service(
@@ -91,7 +101,8 @@ def update_inventory_patch(
 @router.delete("/{inventory_id}",status_code=204)
 def delete_inventory(
     inventory_id:int,
-    db:Session=Depends(get_db)
+    db:Session=Depends(get_db),
+    current_user: User = Depends(require_roles("admin"))
 ):
     delete_inventory_service(
         db=db,

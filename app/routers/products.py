@@ -2,6 +2,9 @@ from fastapi import Depends, APIRouter
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.dependencies import require_roles
+
+from app.models.user import User
 
 from app.schemas.product import (
     ProductCreate,
@@ -25,13 +28,17 @@ router = APIRouter(
 )
 
 @router.get("/",response_model=list[ProductResponse])
-def get_products(db:Session = Depends(get_db)):
+def get_products(
+    db:Session = Depends(get_db),
+    current_user: User = Depends(require_roles("admin","manager","employee"))
+    ):
     return get_all_products_service(db=db)
 
 @router.get("/{product_id}", response_model=ProductResponse)
 def get_product(
     product_id:int,
-    db:Session = Depends(get_db)
+    db:Session = Depends(get_db),
+    current_user: User = Depends(require_roles("admin","manager","employee"))
 ):
 
     return get_proudcts_by_id_service(
@@ -42,7 +49,8 @@ def get_product(
 @router.post("/",response_model=ProductResponse)
 def create_products(
     product:ProductCreate,
-    db:Session = Depends(get_db)
+    db:Session = Depends(get_db),
+    current_user: User = Depends(require_roles("admin"))
     ):
         new_product = create_product_service(
             db=db,
@@ -60,7 +68,8 @@ def create_products(
 def update_product_put(
     product_id:int,
     product:ProductCreate,
-    db:Session=Depends(get_db)
+    db:Session=Depends(get_db),
+    current_user: User = Depends(require_roles("admin"))
 ):
     updates = product.model_dump()
 
@@ -79,7 +88,8 @@ def update_product_put(
 def update_product_patch(
     product_id:int,
     product:ProductUpdate,
-    db:Session=Depends(get_db)
+    db:Session=Depends(get_db),
+    current_user: User = Depends(require_roles("admin"))
 ):
     updates = product.model_dump(exclude_unset=True)
 
@@ -97,7 +107,8 @@ def update_product_patch(
 @router.delete("/{product_id}", status_code=204)
 def delete_product(
     product_id: int,
-    db:Session=Depends(get_db)
+    db:Session=Depends(get_db),
+    current_user: User = Depends(require_roles("admin"))
 ):
     product = get_proudcts_by_id_service(
         db=db,
